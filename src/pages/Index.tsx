@@ -152,9 +152,16 @@ const products = [
   },
 ];
 
+interface CartItem {
+  productId: number;
+  quantity: number;
+}
+
 const Index = () => {
   const [activeSection, setActiveSection] = useState('home');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const { toast } = useToast();
 
   const scrollToSection = (sectionId: string) => {
@@ -175,6 +182,50 @@ const Index = () => {
     ? products 
     : products.filter(p => p.category === selectedCategory);
 
+  const addToCart = (productId: number) => {
+    setCart(prevCart => {
+      const existingItem = prevCart.find(item => item.productId === productId);
+      if (existingItem) {
+        return prevCart.map(item => 
+          item.productId === productId 
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      }
+      return [...prevCart, { productId, quantity: 1 }];
+    });
+    toast({
+      title: 'Товар добавлен в корзину',
+      description: 'Перейдите в корзину для оформления заказа',
+    });
+  };
+
+  const removeFromCart = (productId: number) => {
+    setCart(prevCart => prevCart.filter(item => item.productId !== productId));
+  };
+
+  const updateQuantity = (productId: number, quantity: number) => {
+    if (quantity <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+    setCart(prevCart => 
+      prevCart.map(item => 
+        item.productId === productId 
+          ? { ...item, quantity }
+          : item
+      )
+    );
+  };
+
+  const cartItems = cart.map(item => ({
+    ...products.find(p => p.id === item.productId)!,
+    quantity: item.quantity,
+  }));
+
+  const totalPrice = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-50 bg-primary text-primary-foreground shadow-md">
@@ -182,7 +233,7 @@ const Index = () => {
           <nav className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Icon name="Wrench" size={32} />
-              <h1 className="text-2xl font-bold">АвтоЗапчасти</h1>
+              <h1 className="text-2xl font-bold">Ржавый болид</h1>
             </div>
             <div className="hidden md:flex gap-6">
               <button onClick={() => scrollToSection('home')} className="hover:text-accent transition-colors">
@@ -204,8 +255,18 @@ const Index = () => {
                 Контакты
               </button>
             </div>
-            <Button variant="outline" size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="bg-accent text-accent-foreground hover:bg-accent/90 relative"
+              onClick={() => setIsCartOpen(true)}
+            >
               <Icon name="ShoppingCart" size={20} />
+              {totalItems > 0 && (
+                <span className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                  {totalItems}
+                </span>
+              )}
             </Button>
           </nav>
         </div>
@@ -297,9 +358,13 @@ const Index = () => {
                       </div>
                     </CardContent>
                     <CardFooter>
-                      <Button className="w-full bg-accent hover:bg-accent/90">
+                      <Button 
+                        className="w-full bg-accent hover:bg-accent/90"
+                        onClick={() => addToCart(product.id)}
+                        disabled={!product.inStock}
+                      >
                         <Icon name="ShoppingCart" size={18} className="mr-2" />
-                        В корзину
+                        {product.inStock ? 'В корзину' : 'Нет в наличии'}
                       </Button>
                     </CardFooter>
                   </Card>
@@ -502,7 +567,7 @@ const Index = () => {
 
       <footer className="bg-primary text-primary-foreground py-8">
         <div className="container mx-auto px-4 text-center">
-          <p className="mb-4">&copy; 2024 АвтоЗапчасти. Все права защищены.</p>
+          <p className="mb-4">&copy; 2024 Ржавый болид. Все права защищены.</p>
           <div className="flex justify-center gap-6">
             <button className="hover:text-accent transition-colors">О компании</button>
             <button className="hover:text-accent transition-colors">Политика конфиденциальности</button>
@@ -510,6 +575,114 @@ const Index = () => {
           </div>
         </div>
       </footer>
+
+      {isCartOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-end">
+          <div className="bg-background h-full w-full max-w-md shadow-2xl animate-slide-in-right overflow-y-auto">
+            <div className="sticky top-0 bg-primary text-primary-foreground p-6 flex items-center justify-between">
+              <h2 className="text-2xl font-bold">Корзина</h2>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => setIsCartOpen(false)}
+                className="text-primary-foreground hover:bg-primary-foreground/20"
+              >
+                <Icon name="X" size={24} />
+              </Button>
+            </div>
+
+            <div className="p-6">
+              {cartItems.length === 0 ? (
+                <div className="text-center py-12">
+                  <Icon name="ShoppingCart" size={64} className="mx-auto text-muted-foreground mb-4" />
+                  <p className="text-xl text-muted-foreground">Корзина пуста</p>
+                  <Button 
+                    onClick={() => {
+                      setIsCartOpen(false);
+                      scrollToSection('catalog');
+                    }}
+                    className="mt-6 bg-accent hover:bg-accent/90"
+                  >
+                    Перейти в каталог
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-4 mb-6">
+                    {cartItems.map((item) => (
+                      <Card key={item.id}>
+                        <CardContent className="p-4">
+                          <div className="flex gap-4">
+                            <div className="w-20 h-20 bg-muted rounded overflow-hidden flex-shrink-0">
+                              <img 
+                                src={item.image} 
+                                alt={item.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.src = '/placeholder.svg';
+                                }}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-sm mb-1 line-clamp-2">{item.name}</h3>
+                              <p className="text-accent font-bold mb-2">{item.price} ₽</p>
+                              <div className="flex items-center gap-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                >
+                                  <Icon name="Minus" size={14} />
+                                </Button>
+                                <span className="w-8 text-center font-semibold">{item.quantity}</span>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                >
+                                  <Icon name="Plus" size={14} />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  onClick={() => removeFromCart(item.id)}
+                                  className="ml-auto text-destructive hover:text-destructive"
+                                >
+                                  <Icon name="Trash2" size={16} />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+
+                  <div className="border-t pt-6">
+                    <div className="flex justify-between items-center mb-6">
+                      <span className="text-xl font-semibold">Итого:</span>
+                      <span className="text-3xl font-bold text-accent">{totalPrice.toLocaleString()} ₽</span>
+                    </div>
+                    <Button 
+                      className="w-full bg-accent hover:bg-accent/90 text-lg py-6"
+                      onClick={() => {
+                        toast({
+                          title: 'Заказ оформлен!',
+                          description: `Спасибо за заказ на сумму ${totalPrice.toLocaleString()} ₽. Мы свяжемся с вами в ближайшее время.`,
+                        });
+                        setCart([]);
+                        setIsCartOpen(false);
+                      }}
+                    >
+                      Оформить заказ
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
